@@ -42,7 +42,7 @@ MixerEngine::MixerEngine()
         const bool fxStrip = isFxStrip (i);
         auto& c = ch[(size_t) i];
 
-        c.srcMode  = P ("srcMode", "Source", U::plain, 0, 2, fxStrip ? 2.0f : (i < 2 ? 1.0f : (i == 2 ? 2.0f : 0.0f)));
+        c.srcMode  = P ("srcMode", "Source", U::plain, 0, 3, fxStrip ? 2.0f : (i < 2 ? 1.0f : (i == 2 ? 2.0f : 0.0f)));
         c.srcIndex = P ("srcIndex", "Input", U::plain, 0, 63, i == 1 ? 1.0f : 0.0f);
         c.trim     = P ("trim", "Trim", U::dB, -20, 20, 0);
         c.phase    = P ("phase", "Phase", U::toggle, 0, 1, 0);
@@ -355,18 +355,31 @@ void MixerEngine::processChunk (const float* const* in, int numIn, float* const*
         recorder.write (i, ptrs, n);
     };
 
+    // ---- system audio (Windows playback), read once per block
+    bool sysRead = false;
+
     // ---- input channels
     for (int i = 0; i < kNumInputs; ++i)
     {
         auto& p = ch[(size_t) i];
         const int mode = p.srcMode->index(), first = p.srcIndex->index();
-        int nch = mode == 1 ? 1 : (mode == 2 ? 2 : 0);
-        if (first + nch > numIn) nch = 0;
-        for (int c = 0; c < nch; ++c) if (in[first + c] == nullptr) nch = 0;
+        int nch = 0;
+        if (mode == 3)
+        {
+            if (! sysRead) { sysAudio.read (sysBuf.getWritePointer (0), sysBuf.getWritePointer (1), n); sysRead = true; }
+            nch = 2;
+            for (int c = 0; c < 2; ++c) { work.copyFrom (c, 0, sysBuf, c, 0, n); dry.copyFrom (c, 0, sysBuf, c, 0, n); }
+        }
+        else
+        {
+            nch = mode == 1 ? 1 : (mode == 2 ? 2 : 0);
+            if (first + nch > numIn) nch = 0;
+            for (int c = 0; c < nch; ++c) if (in[first + c] == nullptr) nch = 0;
+            for (int c = 0; c < nch; ++c) { work.copyFrom (c, 0, in[first + c], n); dry.copyFrom (c, 0, in[first + c], n); }
+        }
 
         if (nch == 0) { recordStrip (i, nullptr, 0); continue; }
 
-        for (int c = 0; c < nch; ++c) { work.copyFrom (c, 0, in[first + c], n); dry.copyFrom (c, 0, in[first + c], n); }
         float* d[2] { work.getWritePointer (0), work.getWritePointer (1) };
         processStrip (i, d, nch, n);
 
@@ -486,7 +499,7 @@ bool MixerEngine::startRecording (const juce::File& takeFolder, juce::StringArra
         const int mode = isFxStrip (i) ? 2 : p.srcMode->index();
         if (mode == 0) continue;
         const auto fname = juce::String (i + 1).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (names[(size_t) i]) + ".wav";
-        specs.push_back ({ i, mode == 2 ? 2 : 1, takeFolder.getChildFile (fname) });
+        specs.push_back ({ i, mode >= 2 ? 2 : 1, takeFolder.getChildFile (fname) });
     }
     if (master.recMix->on())
         specs.push_back ({ kMixTrack, 2, takeFolder.getChildFile ("Mix.wav") });

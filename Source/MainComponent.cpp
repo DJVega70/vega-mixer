@@ -101,6 +101,7 @@ MainComponent::~MainComponent()
 {
     stopTimer();
     engine.stopRecording();
+    engine.sysAudio.stop();
     saveState();
     deviceManager.removeAudioCallback (&engine);
     deviceManager.removeChangeListener (this);
@@ -173,6 +174,8 @@ void MainComponent::timerCallback()
     for (auto* s : strips) s->updateMeters();
     masterStrip->updateMeters();
 
+    if (++sysCheck >= 10) { sysCheck = 0; manageSystemAudio(); }
+
     if (engine.recorder.isActive())
     {
         const double secs = (double) engine.recorder.getSamplesWritten() / engine.getSampleRate();
@@ -180,6 +183,18 @@ void MainComponent::timerCallback()
         timeLabel.setText (juce::String::formatted ("%02d:%02d:%02d.%d", h, m, s, t), juce::dontSendNotification);
         if (++blinkCounter >= 15) { blinkCounter = 0; blink = ! blink; recBtn.setToggleState (blink, juce::dontSendNotification); }
     }
+}
+
+void MainComponent::manageSystemAudio()
+{
+    auto& cap = engine.sysAudio;
+    const bool want = engine.wantsSystemAudio();
+    const double sr = engine.getSampleRate();
+    if (want && (! cap.isRunning() || std::abs (cap.runningRate() - sr) > 0.5)) cap.start (sr);
+    else if (! want && cap.isRunning()) cap.stop();
+
+    if (! engine.recorder.isActive())
+        statusLabel.setText (want ? juce::String (cap.status()) + "   |   " + deviceStatus : deviceStatus, juce::dontSendNotification);
 }
 
 void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*) { rebuildDevice(); }
@@ -202,6 +217,7 @@ void MainComponent::rebuildDevice()
     }
     for (auto* s : strips) s->rebuildDevice (inputs, numOuts);
     masterStrip->rebuildDevice (numOuts);
+    deviceStatus = status;
     statusLabel.setText (status, juce::dontSendNotification);
 }
 

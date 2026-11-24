@@ -227,7 +227,9 @@ private:
 
     juce::Array<juce::File> presetFiles;
     juce::File lastTake;
-    juce::String currentPreset;
+    juce::String currentPreset, deviceStatus;
+    int sysCheck = 0;
+    void manageSystemAudio();
     float zoom = 1.0f;
     int blinkCounter = 0;
     bool blink = false;

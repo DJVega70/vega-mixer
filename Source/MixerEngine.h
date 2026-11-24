@@ -2,6 +2,7 @@
 #include "Params.h"
 #include "DSP.h"
 #include "Recorder.h"
+#include "SystemAudioCapture.h"
 
 constexpr int kNumInputs  = 8;                 // input channels
 constexpr int kReverbStrip = kNumInputs;       // FX return strips
@@ -68,6 +69,13 @@ public:
     std::atomic<bool> tapeRolling { false };
 
     Recorder<kNumStrips + 1> recorder;
+    SystemAudioCapture sysAudio;   // INPUT = "System Audio" (what Windows is playing)
+
+    bool wantsSystemAudio() const
+    {
+        for (int i = 0; i < kNumInputs; ++i) if (ch[(size_t) i].srcMode->index() == 3) return true;
+        return false;
+    }
 
     static bool isFxStrip (int i) noexcept { return i >= kNumInputs; }
 
@@ -117,7 +125,7 @@ private:
     std::atomic<double> sampleRate { 48000.0 };
     static constexpr int kChunk = 1024, kMaxOut = 64;
     juce::AudioBuffer<float> work { 2, kChunk }, dry { 2, kChunk }, mix { 2, kChunk },
-                             revBus { 2, kChunk }, dlyBus { 2, kChunk }, direct { kMaxOut, kChunk };
+                             revBus { 2, kChunk }, dlyBus { 2, kChunk }, sysBuf { 2, kChunk }, direct { kMaxOut, kChunk };
     std::array<float, kChunk> silence {};
     std::array<StripDSP, kNumStrips> dsp;
 

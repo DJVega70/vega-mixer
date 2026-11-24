@@ -35,8 +35,13 @@ recording, and lossless export to WAV, FLAC and AIFF.
 
 **BPM** (top bar): drag up or down, or double-click to type. It sets the delay sync. **Ctrl +/-/0** zooms. The app saves your mix and audio setup automatically when you close it.
 
-## Recording internet audio
-Set one strip's INPUT to your loopback source, for example the MiniFuse loopback inputs or **CABLE Output** from VB-Audio Virtual Cable. Then arm it and press REC.
+## Recording what Windows is playing (YouTube, Spotify, browser...)
+1. On any strip, set **INPUT** to **System Audio (what Windows plays)**.
+2. Arm that strip (**Rec**) and press **REC**.
+
+On Windows 10 (2004 or later) and Windows 11, the mixer's own output is left out of the capture. That means you can monitor on the same speakers without feedback.
+On older Windows it captures everything, so mute the monitor (**M** on the master) while recording.
+The status bar shows which mode is active. Only record audio you're allowed to use.
 
 ## Build locally
 ```

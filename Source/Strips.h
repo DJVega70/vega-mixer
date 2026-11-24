@@ -148,6 +148,8 @@ public:
             source.addSectionHeading ("Mono");
             for (int i = 0; i < inputs.size(); ++i)
                 source.addItem ("In " + juce::String (i + 1) + "  " + inputs[i], 100 + i);
+            source.addSectionHeading ("Windows");
+            source.addItem ("System Audio (what Windows plays)", 300);
             if (inputs.size() > 1)
             {
                 source.addSectionHeading ("Stereo");
@@ -307,14 +309,15 @@ private:
     {
         if (fx) return;
         const int mode = p.srcMode->index(), first = p.srcIndex->index();
-        const int id = mode == 1 ? 100 + first : (mode == 2 ? 200 + first : 1);
+        const int id = mode == 3 ? 300 : mode == 1 ? 100 + first : (mode == 2 ? 200 + first : 1);
         source.setSelectedId (source.indexOfItemId (id) >= 0 ? id : 1, juce::dontSendNotification);
     }
 
     void sourceChanged()
     {
         const int id = source.getSelectedId();
-        if (id >= 200)      { p.srcMode->set (2); p.srcIndex->set ((float) (id - 200)); }
+        if (id == 300)      p.srcMode->set (3);
+        else if (id >= 200)      { p.srcMode->set (2); p.srcIndex->set ((float) (id - 200)); }
         else if (id >= 100) { p.srcMode->set (1); p.srcIndex->set ((float) (id - 100)); }
         else                  p.srcMode->set (0);
     }

@@ -20,6 +20,8 @@ endif()
 juce_add_gui_app(VegaMixer
     PRODUCT_NAME "Vega Productions Mixer"
     COMPANY_NAME "Vega Productions"
+    ICON_BIG Resources/icon.png
+    ICON_SMALL Resources/icon.png
     VERSION 1.0.0)
 
 juce_generate_juce_header(VegaMixer)
@@ -31,7 +33,12 @@ juce_add_binary_data(VegaMixerData SOURCES
 target_sources(VegaMixer PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
-    Source/MixerEngine.cpp)
+    Source/MixerEngine.cpp
+    Source/SystemAudioCapture.cpp)
+
+if(WIN32)
+    target_link_libraries(VegaMixer PRIVATE mmdevapi ole32)
+endif()
 
 target_compile_definitions(VegaMixer PRIVATE
     JUCE_WEB_BROWSER=0
@@ -56,7 +63,7 @@ option(VEGA_BUILD_TESTS "Build the headless engine test" OFF)
 if(VEGA_BUILD_TESTS)
     juce_add_console_app(VegaEngineTest PRODUCT_NAME "VegaEngineTest")
     juce_generate_juce_header(VegaEngineTest)
-    target_sources(VegaEngineTest PRIVATE Tests/EngineTest.cpp Source/MixerEngine.cpp)
+    target_sources(VegaEngineTest PRIVATE Tests/EngineTest.cpp Source/MixerEngine.cpp Source/SystemAudioCapture.cpp)
     target_include_directories(VegaEngineTest PRIVATE Source)
     target_compile_definitions(VegaEngineTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_FLAC=1)
     target_link_libraries(VegaEngineTest PRIVATE juce::juce_audio_utils juce::juce_gui_extra PUBLIC juce::juce_recommended_config_flags)
