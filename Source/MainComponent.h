@@ -191,6 +191,9 @@ private:
     void showExport();
     void setZoom (float z);
     void rebuildDevice();
+    void rebuildRateBox();
+    void rateChosen();
+    void switchToExclusive (double wantedRate);
     void refreshAll();
 
     // presets
@@ -221,6 +224,8 @@ private:
 
     juce::Label timeLabel;
     std::unique_ptr<BpmBox> bpm;
+    juce::ComboBox rateBox;
+    juce::Array<double> rateList;
     juce::TextButton recBtn { "REC" }, stopBtn { "STOP" }, exportBtn { "EXPORT" }, takesBtn { "TAKES" }, setupBtn { "AUDIO" };
     juce::Label statusLabel;
     juce::TooltipWindow tooltips { this, 700 };

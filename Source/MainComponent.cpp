@@ -68,6 +68,9 @@ MainComponent::MainComponent()
     addAndMakeVisible (timeLabel);
     bpm = std::make_unique<BpmBox> (*engine.master.bpm);
     addAndMakeVisible (*bpm);
+    rateBox.setTooltip ("Sample rate. Rates above the Windows setting switch the output to Exclusive Mode.");
+    rateBox.onChange = [this] { rateChosen(); };
+    addAndMakeVisible (rateBox);
 
     for (auto* b : { &recBtn, &stopBtn, &exportBtn, &takesBtn, &setupBtn })
     {
@@ -147,6 +150,8 @@ void MainComponent::resized()
     }
     bar.removeFromRight (10);
     bpm->setBounds (bar.removeFromRight (104));
+    bar.removeFromRight (8);
+    rateBox.setBounds (bar.removeFromRight (122));
     bar.removeFromRight (12);
     timeLabel.setBounds (bar.removeFromRight (104));
     bar.removeFromRight (14);
@@ -215,10 +220,116 @@ void MainComponent::rebuildDevice()
                  + juce::String (dev->getCurrentBufferSizeSamples()) + " smp  |  " + juce::String (inputs.size()) + " in / "
                  + juce::String (numOuts) + " out";
     }
+    rebuildRateBox();
     for (auto* s : strips) s->rebuildDevice (inputs, numOuts);
     masterStrip->rebuildDevice (numOuts);
     deviceStatus = status;
     statusLabel.setText (status, juce::dontSendNotification);
+}
+
+//==============================================================================
+static juce::String rateText (double r)
+{
+    const double k = r / 1000.0;
+    return (std::abs (k - std::round (k)) < 0.01 ? juce::String ((int) std::round (k)) : juce::String (k, 1)) + " kHz";
+}
+
+static bool isSharedWasapi (juce::AudioIODevice* dev)
+{
+    const auto t = dev->getTypeName();
+    return t.startsWith ("Windows Audio") && ! t.containsIgnoreCase ("Exclusive");
+}
+
+void MainComponent::rebuildRateBox()
+{
+    rateBox.clear (juce::dontSendNotification);
+    rateList.clearQuick();
+    auto* dev = deviceManager.getCurrentAudioDevice();
+    if (dev == nullptr) { rateBox.setTextWhenNothingSelected ("No device"); return; }
+
+    auto rates = dev->getAvailableSampleRates();
+    std::sort (rates.begin(), rates.end());
+    const double current = dev->getCurrentSampleRate();
+    for (int i = 0; i < rates.size(); ++i)
+    {
+        rateList.add (rates[i]);
+        rateBox.addItem (rateText (rates[i]) + (i == rates.size() - 1 ? "  (MAX)" : ""), i + 1);
+        if (std::abs (rates[i] - current) < 1.0) rateBox.setSelectedId (i + 1, juce::dontSendNotification);
+    }
+
+    // Shared mode is locked to the Windows mixer rate: offer the device's real rates via Exclusive Mode.
+    if (isSharedWasapi (dev))
+    {
+        rateBox.addSeparator();
+        rateBox.addItem ("Higher rates (Exclusive Mode)...", 1000);
+    }
+}
+
+void MainComponent::rateChosen()
+{
+    const int id = rateBox.getSelectedId();
+    if (id == 1000) { switchToExclusive (0.0); return; }
+    const int i = id - 1;
+    if (! juce::isPositiveAndBelow (i, rateList.size())) return;
+
+    auto setup = deviceManager.getAudioDeviceSetup();
+    if (std::abs (setup.sampleRate - rateList[i]) < 1.0) return;
+    setup.sampleRate = rateList[i];
+    const auto err = deviceManager.setAudioDeviceSetup (setup, true);
+    if (err.isNotEmpty())
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Sample rate", err);
+    rebuildDevice();
+}
+
+void MainComponent::switchToExclusive (double wantedRate)
+{
+    auto* dev = deviceManager.getCurrentAudioDevice();
+    const auto outName = deviceManager.getAudioDeviceSetup().outputDeviceName;
+
+    juce::String exclusiveType;
+    for (auto* t : deviceManager.getAvailableDeviceTypes())
+        if (t->getTypeName().containsIgnoreCase ("Exclusive")) exclusiveType = t->getTypeName();
+
+    if (dev == nullptr || exclusiveType.isEmpty())
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Sample rate",
+                                                "Exclusive Mode isn't available on this system.");
+        rebuildDevice();
+        return;
+    }
+
+    deviceManager.setCurrentAudioDeviceType (exclusiveType, true);
+    auto setup = deviceManager.getAudioDeviceSetup();
+    if (auto* type = deviceManager.getCurrentDeviceTypeObject())
+    {
+        type->scanForDevices();
+        if (type->getDeviceNames (false).contains (outName)) setup.outputDeviceName = outName;
+    }
+    setup.inputDeviceName = {};          // output only: keeps the DAC free of input-format limits
+    setup.useDefaultInputChannels = false;
+    setup.inputChannels.clear();
+    deviceManager.setAudioDeviceSetup (setup, true);
+
+    // pick the highest rate the device supports (or the one asked for)
+    if (auto* exDev = deviceManager.getCurrentAudioDevice())
+    {
+        auto rates = exDev->getAvailableSampleRates();
+        double best = 0.0;
+        for (auto r : rates) if (wantedRate <= 0.0 ? r > best : std::abs (r - wantedRate) < 1.0) best = r;
+        if (best > 0.0)
+        {
+            setup = deviceManager.getAudioDeviceSetup();
+            setup.sampleRate = best;
+            deviceManager.setAudioDeviceSetup (setup, true);
+        }
+    }
+    rebuildDevice();
+
+    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Exclusive Mode",
+        "The mixer now has the " + outName + " to itself at its highest rate. Pick any rate from the menu.\n\n"
+        "While it's exclusive, other apps can't play through this DAC. To record browser or Spotify audio with System Audio, "
+        "set Windows' default playback device to something else, such as your laptop speakers.\n\n"
+        "To go back, open AUDIO and choose \"Windows Audio\".");
 }
 
 void MainComponent::refreshAll()
